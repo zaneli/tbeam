@@ -100,7 +100,7 @@ func main() {
 
 	lines := textio.Read(s, *input)
 	counted := CountWords(s, lines)
-	formatted := tbeam.ParDoF[stats.Counted[string], string](s, formatFn, counted)
+	formatted := tbeam.ParDoFn[stats.Counted[string], string](s, formatFn, counted)
 	textio.Write(s, *output, formatted)
 
 	if err := beamx.Run(context.Background(), p); err != nil {
