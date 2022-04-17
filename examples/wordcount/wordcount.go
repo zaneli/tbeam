@@ -77,11 +77,11 @@ func (f *extractFn) FinishBundle(_ context.Context, _ func(string)) error {
 	return nil
 }
 
-func formatFn(counted stats.Counted[string]) string {
-	return fmt.Sprintf("%s: %v", counted.Element, counted.Count)
+func formatFn(counted tbeam.Counted[string]) string {
+	return fmt.Sprintf("%s: %v", counted.Key, counted.Value)
 }
 
-func CountWords(s beam.Scope, lines tbeam.TCollection[string]) tbeam.TCollection[stats.Counted[string]] {
+func CountWords(s beam.Scope, lines tbeam.TCollection[string]) tbeam.TCollection[tbeam.Counted[string]] {
 	s = s.Scope("CountWords")
 	col := tbeam.ParDo[string, string](s, &extractFn{SmallWordLength: *smallWordLength}, lines)
 	return stats.Count(s, col)
@@ -100,7 +100,7 @@ func main() {
 
 	lines := textio.Read(s, *input)
 	counted := CountWords(s, lines)
-	formatted := tbeam.ParDoFn[stats.Counted[string], string](s, formatFn, counted)
+	formatted := tbeam.ParDoFn[tbeam.Counted[string], string](s, formatFn, counted)
 	textio.Write(s, *output, formatted)
 
 	if err := beamx.Run(context.Background(), p); err != nil {

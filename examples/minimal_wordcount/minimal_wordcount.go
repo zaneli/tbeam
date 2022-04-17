@@ -51,8 +51,8 @@ func main() {
 
 	counted := stats.Count(s, words)
 
-	formatted := tbeam.ParDoFn(s, func(counted stats.Counted[string]) string {
-		return fmt.Sprintf("%s: %v", counted.Element, counted.Count)
+	formatted := tbeam.ParDoFn(s, func(counted tbeam.Counted[string]) string {
+		return fmt.Sprintf("%s: %v", counted.Key, counted.Value)
 	}, counted)
 
 	textio.Write(s, "wordcounts.txt", formatted)
