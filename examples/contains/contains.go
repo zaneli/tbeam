@@ -67,7 +67,7 @@ type includeFn struct {
 	Search string `json:"search"`
 }
 
-func (f *includeFn) StartBundle(_ context.Context, _ func(string)) error {
+func (*includeFn) StartBundle(_ context.Context, _ func(string)) error {
 	return nil
 }
 
@@ -78,7 +78,7 @@ func (f *includeFn) ProcessElement(_ context.Context, s string, emit func(string
 	return nil
 }
 
-func (f *includeFn) FinishBundle(_ context.Context, _ func(string)) error {
+func (*includeFn) FinishBundle(_ context.Context, _ func(string)) error {
 	return nil
 }
 

@@ -13,68 +13,72 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// This example code was copied from https://github.com/apache/beam/blob/cff9ccd86b390d8e5edfaa850fcf132da178330e/sdks/go/examples/wordcount/wordcount.go
+// This example code was copied from https://github.com/apache/beam/blob/cff9ccd86b390d8e5edfaa850fcf132da178330e/sdks/go/examples/debugging_wordcount/debugging_wordcount.go
 package main
 
 import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"reflect"
 	"regexp"
-	"strings"
 
 	"github.com/apache/beam/sdks/v2/go/pkg/beam"
+	"github.com/apache/beam/sdks/v2/go/pkg/beam/log"
 	"github.com/apache/beam/sdks/v2/go/pkg/beam/x/beamx"
 
 	"github.com/zaneli/tbeam/pkg/tbeam"
 	"github.com/zaneli/tbeam/pkg/tbeam/io/textio"
+	"github.com/zaneli/tbeam/pkg/tbeam/testing/passert"
 	"github.com/zaneli/tbeam/pkg/tbeam/transforms/stats"
 )
 
 var (
 	input  = flag.String("input", "gs://apache-beam-samples/shakespeare/kinglear.txt", "File(s) to read.")
+	filter = flag.String("filter", "Flourish|stomach", "Regex filter pattern to use. Only words matching this pattern will be included.")
 	output = flag.String("output", "", "Output file (required).")
 )
 
 func init() {
+	beam.RegisterFunction(extractFn)
 	beam.RegisterFunction(formatFn)
-	beam.RegisterType(reflect.TypeOf((*extractFn)(nil)))
-	stats.RegisterCountFunction[string]()
+	beam.RegisterType(reflect.TypeOf((*filterFn)(nil)).Elem())
 }
 
-var (
-	wordRE          = regexp.MustCompile(`[a-zA-Z]+('[a-z])?`)
-	empty           = beam.NewCounter("extract", "emptyLines")
-	smallWordLength = flag.Int("small_word_length", 9, "length of small words (default: 9)")
-	smallWords      = beam.NewCounter("extract", "smallWords")
-	lineLen         = beam.NewDistribution("extract", "lineLenDistro")
-)
+type filterFn struct {
+	Filter string `json:"filter"`
 
-type extractFn struct {
-	SmallWordLength int `json:"smallWordLength"`
+	re *regexp.Regexp
 }
 
-func (*extractFn) StartBundle(_ context.Context, _ func(string)) error {
+func (f *filterFn) Setup() {
+	f.re = regexp.MustCompile(f.Filter)
+}
+
+func (*filterFn) StartBundle(_ context.Context, _ func(tbeam.Counted[string])) error {
 	return nil
 }
 
-func (f *extractFn) ProcessElement(ctx context.Context, line string, emit func(string)) error {
-	lineLen.Update(ctx, int64(len(line)))
-	if len(strings.TrimSpace(line)) == 0 {
-		empty.Inc(ctx, 1)
+func (f *filterFn) ProcessElement(ctx context.Context, counted tbeam.Counted[string], emit func(tbeam.Counted[string])) error {
+	if f.re.MatchString(counted.Key) {
+		log.Infof(ctx, "Matched: %v", counted.Key)
+		emit(counted)
+	} else {
+		log.Debugf(ctx, "Did not match: %v", counted.Key)
 	}
+	return nil
+}
+
+func (*filterFn) FinishBundle(_ context.Context, _ func(tbeam.Counted[string])) error {
+	return nil
+}
+
+var wordRE = regexp.MustCompile(`[a-zA-Z]+('[a-z])?`)
+
+func extractFn(line string, emit func(string)) error {
 	for _, word := range wordRE.FindAllString(line, -1) {
-		if len(word) < f.SmallWordLength {
-			smallWords.Inc(ctx, 1)
-		}
 		emit(word)
 	}
-	return nil
-}
-
-func (*extractFn) FinishBundle(_ context.Context, _ func(string)) error {
 	return nil
 }
 
@@ -84,7 +88,7 @@ func formatFn(counted tbeam.Counted[string]) string {
 
 func CountWords(s beam.Scope, lines tbeam.TCollection[string]) tbeam.TCollection[tbeam.Counted[string]] {
 	s = s.Scope("CountWords")
-	col := tbeam.ParDo[string, string](s, &extractFn{SmallWordLength: *smallWordLength}, lines)
+	col := tbeam.ParDoEmitFn(s, extractFn, lines)
 	return stats.Count(s, col)
 }
 
@@ -92,8 +96,12 @@ func main() {
 	flag.Parse()
 	beam.Init()
 
+	ctx := context.Background()
 	if *output == "" {
-		log.Fatal("No output provided")
+		log.Exit(ctx, "No output provided")
+	}
+	if _, err := regexp.Compile(*filter); err != nil {
+		log.Exitf(ctx, "Invalid filter: %v", err)
 	}
 
 	p := beam.NewPipeline()
@@ -101,10 +109,12 @@ func main() {
 
 	lines := textio.Read(s, *input)
 	counted := CountWords(s, lines)
-	formatted := tbeam.ParDoFn(s, formatFn, counted)
-	textio.Write(s, *output, formatted)
+	filtered := tbeam.ParDo[tbeam.Counted[string], tbeam.Counted[string]](s, &filterFn{Filter: *filter}, counted)
+	formatted := tbeam.ParDoFn(s, formatFn, filtered)
 
-	if err := beamx.Run(context.Background(), p); err != nil {
-		log.Fatalf("Failed to execute job: %v", err)
+	passert.Equals(s, formatted, "Flourish: 3", "stomach: 1")
+
+	if err := beamx.Run(ctx, p); err != nil {
+		log.Exitf(ctx, "Failed to execute job: %v", err)
 	}
 }
