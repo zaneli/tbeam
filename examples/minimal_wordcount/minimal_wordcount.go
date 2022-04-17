@@ -34,6 +34,10 @@ import (
 
 var wordRE = regexp.MustCompile(`[a-zA-Z]+('[a-z])?`)
 
+func init() {
+	stats.RegisterCountFunction[string]()
+}
+
 func main() {
 	beam.Init()
 
@@ -42,7 +46,7 @@ func main() {
 
 	lines := textio.Read(s, "gs://apache-beam-samples/shakespeare/kinglear.txt")
 
-	words := tbeam.ParDoEmitFn[string, string](s, func(line string, emit func(string)) error {
+	words := tbeam.ParDoEmitFn(s, func(line string, emit func(string)) error {
 		for _, word := range wordRE.FindAllString(line, -1) {
 			emit(word)
 		}

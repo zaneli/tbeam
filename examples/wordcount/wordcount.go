@@ -41,6 +41,7 @@ var (
 func init() {
 	beam.RegisterFunction(formatFn)
 	beam.RegisterType(reflect.TypeOf((*extractFn)(nil)))
+	stats.RegisterCountFunction[string]()
 }
 
 var (
@@ -100,7 +101,7 @@ func main() {
 
 	lines := textio.Read(s, *input)
 	counted := CountWords(s, lines)
-	formatted := tbeam.ParDoFn[tbeam.Counted[string], string](s, formatFn, counted)
+	formatted := tbeam.ParDoFn(s, formatFn, counted)
 	textio.Write(s, *output, formatted)
 
 	if err := beamx.Run(context.Background(), p); err != nil {

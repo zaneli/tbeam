@@ -15,3 +15,11 @@ func Read(s beam.Scope, glob string) tbeam.TCollection[string] {
 func Write(s beam.Scope, filename string, col tbeam.TCollection[string]) {
 	textio.Write(s, filename, col.Unwrap())
 }
+
+func Immediate(s beam.Scope, filename string) (tbeam.TCollection[string], error) {
+	col, err := textio.Immediate(s, filename)
+	if err != nil {
+		return tbeam.Wrap[string](beam.PCollection{}), err
+	}
+	return tbeam.Wrap[string](col), nil
+}

@@ -43,6 +43,7 @@ func init() {
 	beam.RegisterFunction(extractFn)
 	beam.RegisterFunction(formatFn)
 	beam.RegisterType(reflect.TypeOf((*includeFn)(nil)).Elem())
+	stats.RegisterCountFunction[string]()
 }
 
 func FilterWords(s beam.Scope, lines tbeam.TCollection[string]) tbeam.TCollection[tbeam.Counted[string]] {
